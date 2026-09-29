@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+data/
+.env
+*.log
+release/
+outputs/
+work/
+.electron-cache/
+/index.js
+/openai-agent.js
+/run-chat.js

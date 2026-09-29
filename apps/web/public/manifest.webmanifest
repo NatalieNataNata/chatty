@@ -1,0 +1,17 @@
+{
+  "name": "Chatty Private AI Radio",
+  "short_name": "Chatty",
+  "description": "A private AI radio host that reads the moment, speaks, and plays.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080d",
+  "theme_color": "#0c0c0e",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

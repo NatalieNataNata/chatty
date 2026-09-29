@@ -1,0 +1,90 @@
+{
+  "name": "chatty-fm-agent",
+  "description": "A private AI radio companion for music, voice, and daily context.",
+  "author": "Natalie",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "main": "apps/desktop/main.mjs",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @chatty/server & npm run dev --workspace @chatty/web",
+    "dev:server": "npm run dev --workspace @chatty/server",
+    "dev:web": "npm run dev --workspace @chatty/web",
+    "build": "npm run build --workspace @chatty/shared && npm run build --workspace @chatty/server && npm run build --workspace @chatty/web && node scripts/build-speech-helper.mjs",
+    "desktop:dev": "node scripts/dev-desktop.mjs",
+    "desktop:preview": "node scripts/dev-desktop.mjs",
+    "desktop:package": "npm run build && electron-rebuild -f -w better-sqlite3 -v 43.1.1 -a arm64 && electron-builder --mac dir --arm64 --config.npmRebuild=false",
+    "voice:create": "node scripts/create-fish-voice.mjs",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "build": {
+    "appId": "dev.mmguo.chatty",
+    "productName": "Chatty",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "apps/desktop/build"
+    },
+    "files": [
+      "package.json",
+      "apps/desktop/*.mjs",
+      "apps/desktop/*.cjs",
+      "apps/desktop/*.html",
+      "apps/desktop/*.gif",
+      "apps/desktop/*.png",
+      "apps/desktop/speech-recognition",
+      "apps/server/dist/**/*",
+      "apps/web/dist/**/*",
+      "packages/shared/dist/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "persona",
+        "to": "persona"
+      },
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "apps/desktop/speech-recognition"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "apps/desktop/build/icon.icns",
+      "extendInfo": {
+        "NSLocationWhenInUseUsageDescription": "Chatty uses your location to provide accurate local weather and radio context.",
+        "NSMicrophoneUsageDescription": "Chatty uses your microphone to turn spoken requests into text.",
+        "NSSpeechRecognitionUsageDescription": "Chatty uses macOS Speech Recognition to transcribe your music requests."
+      },
+      "target": [
+        "dir"
+      ]
+    }
+  },
+  "dependencies": {
+    "@chatty/shared": "file:packages/shared",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/static": "^8.3.0",
+    "@fastify/websocket": "^11.2.0",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^17.2.2",
+    "fastify": "^5.6.1",
+    "NeteaseCloudMusicApi": "^4.32.0",
+    "openai": "^5.20.2",
+    "undici": "^7.16.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3"
+  }
+}
