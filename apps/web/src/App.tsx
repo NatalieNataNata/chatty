@@ -806,10 +806,7 @@ function App() {
   }
 
   async function controlPlayback(action: 'play' | 'pause' | 'previous' | 'next' | 'ended' | 'select' | 'remove' | 'move_up' | 'move_down', trackId?: string) {
-    if (!player.currentTrack && action === 'play') {
-      setCommandOpen(true)
-      return
-    }
+    if (!player.currentTrack && action === 'play') return
     const next = (await fetch('/api/playback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1061,7 +1058,14 @@ function App() {
             </div>
             <div className="deck-transport" aria-label="Playback controls">
               <button className="skip-control" type="button" onClick={() => void controlPlayback('previous')} disabled={player.queue.length < 2} aria-label="Previous track">‹</button>
-              <button className="round-control" type="button" onClick={() => void controlPlayback(player.isPlaying ? 'pause' : 'play')} aria-label={player.isPlaying ? 'Pause radio' : 'Play radio'}>
+              <button
+                className="round-control"
+                type="button"
+                onClick={() => void controlPlayback(player.isPlaying ? 'pause' : 'play')}
+                disabled={!player.currentTrack}
+                aria-label={player.currentTrack ? (player.isPlaying ? 'Pause radio' : 'Play radio') : 'Choose what to hear before starting the radio'}
+                title={player.currentTrack ? undefined : 'Choose a cue below to start the radio'}
+              >
                 {player.isPlaying ? <PauseIcon /> : <PlayIcon />}
               </button>
               <button className="skip-control" type="button" onClick={() => void controlPlayback('next')} disabled={player.queue.length < 2} aria-label="Next track">›</button>

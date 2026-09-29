@@ -134,6 +134,7 @@ button { cursor: pointer; }
 .deck-transport { display: flex; width: 100%; align-items: center; justify-content: center; gap: 5px; }
 .round-control { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; padding: 0; border: 1px solid rgba(139,215,241,.32); border-radius: 4px 12px 4px 4px; background: var(--cyan); color: #061016; box-shadow: 0 0 22px rgba(102,190,223,.16); }
 .round-control svg { width: 14px; height: 14px; }
+.round-control:disabled { cursor: not-allowed; opacity: .32; box-shadow: none; }
 .skip-control { width: 28px; padding: 0; border: 0; background: transparent; color: #778892; font-family: 'Chakra Petch',sans-serif; font-size: 26px; }
 .skip-control:disabled { opacity: .25; }
 .volume-control { display: flex; width: 112px; flex: 0 0 112px; align-items: center; gap: 6px; color: #70858f; }
