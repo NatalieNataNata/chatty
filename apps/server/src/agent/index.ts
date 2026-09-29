@@ -64,10 +64,10 @@ export function createAgentProvider(): AgentProvider {
           throw new Error(lastAgentIssue.message)
         }
       },
-      async composeOpening(context, currentTrack) {
+      async composeOpening(context, currentTrack, mode) {
         agentCalls += 1
         try {
-          const opening = await openai.composeOpening(context, currentTrack)
+          const opening = await openai.composeOpening(context, currentTrack, mode)
           lastAgentError = null
           lastAgentIssue = null
           return opening

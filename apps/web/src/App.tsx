@@ -317,7 +317,7 @@ function App() {
   const [radioPlan, setRadioPlan] = useState<RadioPlan | null>(null)
   const [memories, setMemories] = useState<MemoryRecord[]>([])
   const [pendingMemory, setPendingMemory] = useState<MemoryCandidate | null>(null)
-  const [openingSuggestions, setOpeningSuggestions] = useState<'fresh' | 'resume' | null>(null)
+  const [openingSuggestions, setOpeningSuggestions] = useState<string[]>([])
   const [voiceListening, setVoiceListening] = useState(false)
   const [selectedTasteTag, setSelectedTasteTag] = useState<string | null>(null)
   const [liveContext, setLiveContext] = useState<LiveContext>({ city: '北京', weather: 'Loading weather…', temperature: null, precise: false, live: false })
@@ -345,6 +345,7 @@ function App() {
   const playlistInputRef = useRef<HTMLInputElement | null>(null)
   const lastProgressReportRef = useRef(0)
   const lastAudibleVolumeRef = useRef(musicVolume > 0 ? musicVolume : defaultMusicVolume)
+  const openingRequestedRef = useRef(false)
 
   const conversation = buildConversation(messages)
   const currentLine = activeSpeech?.text ?? player.lastSay?.text
@@ -357,7 +358,7 @@ function App() {
     year: 'numeric',
   })
   const selectedPlatform = musicPlatforms.find((platform) => platform.id === selectedPlatformId) ?? musicPlatforms[0]
-  const needsFirstMusicConnection = neteaseStatus === 'disconnected' && library.total === 0
+  const musicSetupRequired = neteaseStatus !== 'connected' || library.total === 0
   // Keep the live track inside one continuous set, even while a DJ link is holding
   // the previous track under the incoming queue.
   const programmeTracks = player.currentTrack && !player.queue.some((track) => track.id === player.currentTrack?.id)
@@ -391,18 +392,7 @@ function App() {
         setPlayer(data.player)
         setMessages(data.messages)
       })
-      .then(() => fetch('/api/session/opening', { method: 'POST' }))
-      .then((response) => response.json())
-      .then((opening: { asked: boolean; kind: 'fresh' | 'resume' | null; speech: SayEvent | null }) => {
-        if (!opening.asked || !opening.kind) return
-        setOpeningSuggestions(opening.kind)
-        if (ownsAudio && opening.speech) speak(opening.speech)
-        return fetch('/api/now').then((response) => response.json()).then((data: NowResponse) => {
-          setPlayer(data.player)
-          setMessages(data.messages)
-        })
-      })
-      .catch(() => setAgentWarning('Chatty could not start the opening conversation. You can still type a request below.'))
+      .catch(() => setAgentWarning('Chatty could not restore the radio. You can still reconnect below.'))
   }, [])
 
   useEffect(() => {
@@ -434,6 +424,30 @@ function App() {
   useEffect(() => {
     void refreshLibrary()
   }, [])
+
+  useEffect(() => {
+    if (neteaseStatus !== 'connected' || library.total > 0) return
+    void refreshLibrary()
+    const timer = window.setInterval(() => void refreshLibrary(), 1500)
+    return () => window.clearInterval(timer)
+  }, [neteaseStatus, library.total])
+
+  useEffect(() => {
+    if (neteaseStatus !== 'connected' || library.total === 0 || openingRequestedRef.current) return
+    openingRequestedRef.current = true
+    void fetch('/api/session/opening', { method: 'POST' })
+      .then((response) => response.json())
+      .then((opening: { asked: boolean; kind: 'fresh' | 'resume' | 'setup' | null; suggestions: string[]; speech: SayEvent | null }) => {
+        if (!opening.asked) return
+        setOpeningSuggestions(opening.suggestions ?? [])
+        if (ownsAudio && opening.speech) speak(opening.speech)
+        return fetch('/api/now').then((response) => response.json()).then((data: NowResponse) => {
+          setPlayer(data.player)
+          setMessages(data.messages)
+        })
+      })
+      .catch(() => setAgentWarning('Chatty could not start the opening conversation. You can still type a request below.'))
+  }, [neteaseStatus, library.total])
 
   useEffect(() => {
     void refreshRuntimeStatus()
@@ -492,7 +506,7 @@ function App() {
       if (message.type === 'agent_state') setAgentActivity(message.payload.message)
       if (message.type === 'plan_updated') setRadioPlan(message.payload)
       if (message.type === 'memory_question') {
-        setOpeningSuggestions(null)
+        setOpeningSuggestions([])
         setPendingMemory(message.payload)
         setChatExpanded(true)
         void fetch('/api/now').then((response) => response.json()).then((data: NowResponse) => setMessages(data.messages))
@@ -709,7 +723,7 @@ function App() {
 
   async function sendMessage(message: string) {
     if (!message || sending) return
-    setOpeningSuggestions(null)
+    setOpeningSuggestions([])
     const previousSayId = player.lastSay?.id
 
     const audio = audioRef.current
@@ -1129,14 +1143,12 @@ function App() {
               </div>
             </div>
           ) : null}
-          {!pendingMemory && openingSuggestions ? (
+          {!pendingMemory && openingSuggestions.length > 0 ? (
             <div className="opening-suggestions" aria-label="Quick listening choices">
-              {openingSuggestions === 'resume' ? (
-                <button type="button" onClick={() => void sendMessage('继续刚才的电台')}>继续刚才的</button>
-              ) : null}
-              <button type="button" onClick={() => void sendMessage('我在工作，来点轻松的')}>工作·轻松</button>
-              <button type="button" onClick={() => void sendMessage('我想放松一下')}>放松一下</button>
-              <button type="button" onClick={() => void sendMessage('随便选，给我个惊喜')}>给我个惊喜</button>
+              <span>Try one, or say anything</span>
+              {openingSuggestions.map((suggestion) => (
+                <button type="button" key={suggestion} onClick={() => void sendMessage(suggestion)}>{suggestion}</button>
+              ))}
             </div>
           ) : null}
         </section>
@@ -1154,7 +1166,10 @@ function App() {
           <input
             value={input}
             onFocus={() => setChatExpanded(true)}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={(event) => {
+              setInput(event.target.value)
+              if (event.target.value) setOpeningSuggestions([])
+            }}
             onKeyDown={submitInputOnEnter}
             placeholder="来点适合现在的歌"
             aria-label="Tell Chatty what you want to hear"
@@ -1342,31 +1357,35 @@ function App() {
         </div>
       ) : null}
 
-      {needsFirstMusicConnection && !neteaseQr ? (
+      {musicSetupRequired && !neteaseQr ? (
         <section className="source-onboarding" aria-label="Connect your music library">
-          <div className="source-onboarding-tabs">
-            {musicPlatforms.slice(0, 3).map((platform) => (
-              <button
-                key={platform.id}
-                type="button"
-                className={platform.id === selectedPlatformId ? 'selected' : ''}
-                onClick={() => setSelectedPlatformId(platform.id)}
-              >
-                {platform.label}{platform.id === 'qq' ? <small> SOON</small> : null}
-              </button>
-            ))}
-          </div>
+          {neteaseStatus === 'disconnected' ? <div className="source-onboarding-tabs">
+              {musicPlatforms.slice(0, 3).map((platform) => (
+                <button
+                  key={platform.id}
+                  type="button"
+                  className={platform.id === selectedPlatformId ? 'selected' : ''}
+                  onClick={() => setSelectedPlatformId(platform.id)}
+                >
+                  {platform.label}{platform.id === 'qq' ? <small> SOON</small> : null}
+                </button>
+              ))}
+            </div> : null}
           <div className="source-onboarding-card">
             <p className="profile-kicker">CHATTY PERSONAL LIBRARY</p>
-            <h2>{selectedPlatformId === 'netease' ? '先连接你的网易云歌单' : '连接你的音乐库'}</h2>
-            <p>Chatty 只会从你同步进来的个人歌单选歌。登录后可读取歌单，再由你决定同步哪些内容。</p>
-            {selectedPlatformId === 'netease' ? (
+            {neteaseStatus === 'checking' ? (
+              <div className="source-syncing"><b>●</b><h2>正在检查音乐账号</h2><p>Chatty 会先确认你的音乐库，再开始电台。</p></div>
+            ) : neteaseStatus === 'connected' ? (
+              <div className="source-syncing"><b>↻</b><h2>正在同步你的歌单</h2><p>第一次同步完成后，Chatty 才会根据真实音乐库开始选歌。</p></div>
+            ) : selectedPlatformId === 'netease' ? (
               <>
+                <h2>先连接你的网易云歌单</h2>
+                <p>登录是开始电台的第一步。扫码后 Chatty 会读取并同步你的歌单，再询问你此刻想听什么。</p>
                 <div className="source-qr-placeholder"><b>NE</b><span>打开网易云音乐<br />扫码登录</span></div>
                 <button type="button" className="source-login-button" onClick={() => void startNeteaseLogin()}>扫码登录网易云音乐 →</button>
               </>
             ) : (
-              <div className="source-pending"><b>QQ</b><p>QQ 音乐的真实授权和播放适配正在接入。现在不会把它伪装成已经连接。</p></div>
+              <><h2>连接你的音乐库</h2><div className="source-pending"><b>QQ</b><p>QQ 音乐的真实授权和播放适配正在接入。现在不会把它伪装成已经连接。</p></div></>
             )}
           </div>
         </section>

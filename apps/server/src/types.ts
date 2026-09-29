@@ -72,7 +72,11 @@ export interface WeatherProvider {
 export interface AgentProvider {
   decide(context: ContextBundle): Promise<AgentDecision>
   narrateTrack(context: ContextBundle, track: Track, moment: 'programme_open' | 'track_change' | 'explain'): Promise<string>
-  composeOpening(context: ContextBundle, currentTrack: Track | null): Promise<string>
+  composeOpening(
+    context: ContextBundle,
+    currentTrack: Track | null,
+    mode: 'fresh' | 'resume',
+  ): Promise<{ line: string; suggestions: string[] }>
 }
 
 export interface RuntimeDeps {

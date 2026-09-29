@@ -234,16 +234,25 @@ app.get('/api/tts/status', async () => getTtsRuntimeStatus())
 
 app.post('/api/session/opening', async () => {
   if (openingDelivered || state.getPendingMemoryCandidate()) {
-    return { asked: false, kind: null, speech: null }
+    return { asked: false, kind: null, suggestions: [], speech: null }
   }
 
-  openingDelivered = true
+  const [connection, library] = await Promise.all([
+    neteaseMusic.getConnectionStatus(),
+    getLibrarySummary(),
+  ])
+  if (!connection.connected || library.total === 0) {
+    return { asked: false, kind: 'setup', suggestions: [], speech: null }
+  }
+
   const player = state.getPlayerState()
-  const kind = player.currentTrack ? 'resume' : 'fresh'
+  const kind = state.getRecentTracks(1).length > 0 ? 'resume' : 'fresh'
+  openingDelivered = true
 
   try {
     const context = await buildContext('Open this radio session with a fresh listener check-in.', deps, state.getCurrentPlan()?.activity)
-    const line = await deps.agent.composeOpening(context, player.currentTrack)
+    const { line, suggestions } = await deps.agent.composeOpening(context, player.currentTrack, kind)
+    if (line === 'SILENT') return { asked: false, kind, suggestions: [], speech: null }
     state.addMessage({ role: 'agent', content: `SAY: ${line}`, timestamp: new Date().toISOString() })
     broadcaster.emitNow()
     const speech = { ...(await deps.tts.synthesize(line)), afterSpeech: 'continue' as const }
@@ -251,10 +260,10 @@ app.post('/api/session/opening', async () => {
     state.setPlayerState({ ...latest, lastSay: speech, mode: 'speaking' })
     broadcaster.emitTts(speech)
     broadcaster.emitNow()
-    return { asked: true, kind, speech }
+    return { asked: true, kind, suggestions, speech }
   } catch (error) {
     broadcaster.emitLog(`Chatty could not compose the live opening: ${error instanceof Error ? error.message : String(error)}`)
-    return { asked: false, kind: null, speech: null }
+    return { asked: false, kind: null, suggestions: [], speech: null }
   }
 })
 

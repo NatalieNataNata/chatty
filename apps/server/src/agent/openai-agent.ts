@@ -112,15 +112,18 @@ export class OpenAiAgentProvider implements AgentProvider {
     return narration
   }
 
-  async composeOpening(context: ContextBundle, currentTrack: Track | null) {
+  async composeOpening(context: ContextBundle, currentTrack: Track | null, mode: 'fresh' | 'resume') {
     const system = [
       context.persona.djPersona,
-      'Write the live opening line for a private AI radio session.',
-      'Output natural English only, with no headings, quotation marks, stage directions, or JSON.',
-      'Do not reuse a stock greeting. Vary the rhythm and wording from recent conversation history.',
-      'Ground the line in the actual time, environment, active programme, and current track when useful.',
-      'End with one natural question that helps the listener choose whether to continue, change direction, or describe what they want now.',
-      'Keep it concise enough to speak aloud, but do not use a fixed template.',
+      'Return JSON only: {"line": string, "suggestions": string[]}.',
+      'Every string must be natural English. Do not use headings, stage directions, or quotation marks inside the strings.',
+      'This is a private radio opening, not a weather report or a recap. Never stack the time, weather, calendar, track, and listening history into one line.',
+      'Do not reuse a stock greeting. Vary both the idea and wording from recent conversation history.',
+      mode === 'fresh'
+        ? 'This listener has no listening history yet. Ask exactly one open-ended question, in at most 12 words, that helps you choose what to play. Do not pretend to know their taste.'
+        : 'This listener has history. Use at most one genuinely relevant context detail and keep the line to at most 18 words. You may ask a brief question, resume naturally, or return line "SILENT" when uninterrupted playback is the better experience.',
+      'Suggestions are optional examples, not the permitted answers. Return zero to three short, context-specific replies; never reuse fixed mood-category buttons.',
+      'When line is "SILENT", suggestions must be empty.',
       'Do not claim an action has happened and do not select or change music in this line.',
     ].join('\n')
     const response = await this.request((client) => client.chat.completions.create({
@@ -129,6 +132,7 @@ export class OpenAiAgentProvider implements AgentProvider {
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: JSON.stringify({
+          mode,
           environment: context.environment,
           plan: context.currentPlan,
           recentConversation: context.history.slice(-8),
@@ -136,9 +140,16 @@ export class OpenAiAgentProvider implements AgentProvider {
           currentTrack: currentTrack ? { title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album } : null,
         }) },
       ],
+      response_format: { type: 'json_object' },
     }))
-    const opening = response.choices[0]?.message?.content?.trim()
-    if (!opening) throw new Error('The DJ brain returned an empty opening line.')
-    return opening
+    const content = response.choices[0]?.message?.content?.trim()
+    if (!content) throw new Error('The DJ brain returned an empty opening line.')
+    const parsed = JSON.parse(content) as { line?: unknown; suggestions?: unknown }
+    const line = typeof parsed.line === 'string' ? parsed.line.trim() : ''
+    if (!line) throw new Error('The DJ brain returned an empty opening line.')
+    const suggestions = Array.isArray(parsed.suggestions)
+      ? parsed.suggestions.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()).slice(0, 3)
+      : []
+    return { line, suggestions: line === 'SILENT' ? [] : suggestions }
   }
 }

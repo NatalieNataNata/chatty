@@ -119,10 +119,10 @@ async function startAgent() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 620,
-    height: 940,
-    minWidth: 420,
-    minHeight: 700,
+    width: 430,
+    height: 764,
+    minWidth: 390,
+    minHeight: 693,
     show: false,
     title: 'Chatty',
     titleBarStyle: 'hiddenInset',
@@ -137,6 +137,8 @@ function createWindow() {
       sandbox: true,
     },
   })
+
+  mainWindow.setAspectRatio(9 / 16)
 
   mainWindow.loadURL(devServerUrl ? `${devServerUrl}/?desktop=1` : `http://127.0.0.1:${port}/?desktop=1`)
   mainWindow.once('ready-to-show', () => mainWindow?.show())
